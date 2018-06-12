@@ -1,0 +1,60 @@
+TestCase: test1
+Memory Read Count:  1174098
+Memory Write Count: 139370
+Cpu environment change time: 676
+Tolerance (lower is better): 980
+
+TestCase: test2
+Memory Read Count:  1245833
+Memory Write Count: 141038
+Cpu environment change time: 720
+Tolerance (lower is better): 1396
+
+TestCase: test3
+Memory Read Count:  813215
+Memory Write Count: 135452
+Cpu environment change time: 442
+Tolerance (lower is better): 820
+
+TestCase: test4
+Memory Read Count:  673229
+Memory Write Count: 134454
+Cpu environment change time: 348
+Tolerance (lower is better): 762
+
+TestCase: test5
+Memory Read Count:  615558
+Memory Write Count: 133436
+Cpu environment change time: 326
+Tolerance (lower is better): 456
+
+TestCase: test6
+Memory Read Count:  1074625
+Memory Write Count: 138997
+Cpu environment change time: 642
+Tolerance (lower is better): 1208
+
+TestCase: test7
+Memory Read Count:  1230108
+Memory Write Count: 140770
+Cpu environment change time: 688
+Tolerance (lower is better): 974
+
+TestCase: test8
+Memory Read Count:  1263236
+Memory Write Count: 140567
+Cpu environment change time: 784
+Tolerance (lower is better): 1090
+
+TestCase: test9
+Memory Read Count:  431979
+Memory Write Count: 131835
+Cpu environment change time: 242
+Tolerance (lower is better): 390
+
+TestCase: test10
+Memory Read Count:  1132053
+Memory Write Count: 139921
+Cpu environment change time: 684
+Tolerance (lower is better): 1158
+
