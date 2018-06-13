@@ -43,7 +43,7 @@ public class Test {
         Schedule schedule = (Schedule) clazz.newInstance();
         schedule.setBottomService(bottomService);
 
-        for(int i = 0 ; i < 1000 ; i++){
+        for(int i = 0 ; i < 10000 ; i++){
             Task[] tasks = bottomMonitor.getTaskArrived();
             int[] cpuOperate = new int[cpuNumber];
             schedule.ProcessSchedule(tasks,cpuOperate);

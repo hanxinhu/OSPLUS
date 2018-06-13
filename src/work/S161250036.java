@@ -33,167 +33,196 @@ import java.io.IOException;
  * void writeFreeMemory(int offset, byte x)
  */
 public class S161250036 extends Schedule {
-    private static final int resourceBitBegin = 0;
+    private static final int MEM_SIZE = 20 * 1024 - 1024;
+
     /**
-     * 记录栈底的储存位置
+     * 留1M资源来存 资源占用相关信息
      */
-    private static final int cleanLengthBegin = 128;
-    private static final int cleanResourceBegin = cleanLengthBegin + 2;
-    private static final int ebpBeginner = cleanResourceBegin + 128;
+    private static final int resourceBitBegin = MEM_SIZE;
+    /**
+     * 记录长度
+     */
+    private static final int cleanResourceBegin = resourceBitBegin + 128;
+    private static final int cleanLengthBegin = cleanResourceBegin + 128;
+
+    private static final int ebpBeginner = cleanLengthBegin + 2;
     /**
      * 记录栈顶的储存位置
      */
-    private static final int espBeginner = ebpBeginner + 4;
-    /**
-     * EBP 的初始值 从这里开始 即PCB的开始点
-     */
-    private static final int EBP = espBeginner + 4;
-    /**
-     * ESP 的最小值
-     */
-    private static final int ESP = espBeginner + 4;
+    private static final int espBeginner = ebpBeginner + 2;
 
     private static final int pcb_tidBeginner = 0;
-    private static final int pcb_runningBeginner = 4;
-
-    private static final int pcb_leftTimeBeginner = 5;
-    private static final int pcb_rsLengthBeginner = 7;
-    private static final int pcb_resourceBeginner = 8;
-    private static final int length = 20;
+    private static final int pcb_runningBeginner = 2;
+    private static final int pcb_leftTimeBeginner = 3;
+    private static final int pcb_rsLengthBeginner = 5;
+    private static final int pcb_resourceBeginner = 6;
 
     @Override
     public void ProcessSchedule(Task[] arrivedTask, int[] cpuOperate) {
-
         int esp = recordTasks(arrivedTask);
-
-        int cpuCount = 0;
+        int ebp = readShortResource(ebpBeginner);
+        int initEBP = ebp;
         int cpuNumber = getCpuNumber();
-        for (int i = EBP; i < esp && cpuCount < cpuNumber; ) {
-            int tid = readShort(i);
-            if (tid == 0) {
-                i += 2;
-                while (readFreeMemory(i) == 0 && i < esp) {
-                    i++;
-                }
-                continue;
-            }
-            int isRunning = readFreeMemory(i + pcb_runningBeginner);
-            int resourceLength = readFreeMemory(i + pcb_rsLengthBeginner) + 1;
+        int cpuCount = 0;
+
+
+        boolean clean = false;
+        for (int i = ebp; i < esp && cpuCount < cpuNumber; ) {
+            int isRunning = readByte(i + pcb_runningBeginner);
             int leftTime = readShort(i + pcb_leftTimeBeginner);
-            if (isRunning > 0) {
-                cpuOperate[cpuCount++] = tid;
+            int resourceLength = readByte(i + pcb_rsLengthBeginner) + 1;
+            //上次已经占有CPU 故而继续占有CPU 无需检测资源
+            if (isRunning > 0 && leftTime > 0) {
+                int tid = readShort(i + pcb_tidBeginner);
                 leftTime--;
+                cpuOperate[cpuCount++] = tid;
                 writeShort(i + pcb_leftTimeBeginner, leftTime);
                 if (leftTime == 0) {
-                    writeFreeMemory(i + pcb_runningBeginner, (byte) 0);
-                    System.out.println(tid + " is finished");
-                    cleanResource(i, resourceLength);
+                    clean = true;
+                    cleanResources(i, resourceLength);
                 }
-            } else if (leftTime > 0) {
-//                System.out.println(tid + " is trying to use:");
-                if (useResource(i, resourceLength)) {
-                    leftTime--;
-                    cpuOperate[cpuCount++] = tid;
-//                    System.out.println(cpuCount + " is running " + tid);
-                    writeShort(i + pcb_leftTimeBeginner, leftTime);
-                    if (leftTime == 0) {
-                        writeFreeMemory(i + pcb_runningBeginner, (byte) 0);
-//                        System.out.println(tid + " is finished");
-                        cleanResource(i, resourceLength);
-                    } else
-                        writeFreeMemory(i + pcb_runningBeginner, (byte) 1);
-                }
+            }//否则检测资源是否可用
+            else if (leftTime > 0 && useResources(i, resourceLength)) {
+                int tid = readShort(i + pcb_tidBeginner);
+                leftTime--;
+                cpuOperate[cpuCount++] = tid;
+                writeShort(i + pcb_leftTimeBeginner, leftTime);
+                if (leftTime == 0) {
+                    clean = true;
+                    cleanResources(i, resourceLength);
+                } else
+                    writeByte(i + pcb_runningBeginner, 1);
+
             }
+            if (leftTime == 0 && ebp == i)
+                ebp += pcb_resourceBeginner + resourceLength;
             i += pcb_resourceBeginner + resourceLength;
         }
-        clean();
 
-
+        if (clean) {
+            clean();
+        }
+        if (ebp > (Short.MAX_VALUE - MEM_SIZE) && esp > (Short.MAX_VALUE - MEM_SIZE)) {
+            writeShortResource(ebpBeginner, ebp % MEM_SIZE);
+            writeShortResource(espBeginner, esp % MEM_SIZE);
+            return;
+        }
+        if (ebp > initEBP)
+            writeShortResource(ebpBeginner, ebp);
     }
 
-
     /**
-     * 记录到达的tasks信息 并返回 task
+     * 记录到达的tasks信息 并返回 esp
      *
      * @param tasks
      * @return
      */
     private int recordTasks(Task[] tasks) {
-        if (tasks==null && tasks.length == 0)
-            return readInteger(espBeginner);
-        int esp = readInteger(espBeginner);
-        if (esp < ESP)
-            esp = ESP;
+        int esp = readShortResource(espBeginner);
+        if (tasks == null || tasks.length == 0)
+            return esp;
         for (int i = 0; i < tasks.length; i++) {
             writeShort(esp + pcb_tidBeginner, tasks[i].tid);
-            writeFreeMemory(esp + pcb_runningBeginner, (byte) 0);
+            writeByte(esp + pcb_runningBeginner, 0);
             writeShort(esp + pcb_leftTimeBeginner, tasks[i].cpuTime);
-            writeFreeMemory(esp + pcb_rsLengthBeginner, (byte) (tasks[i].resource.length - 1));
+            writeByte(esp + pcb_rsLengthBeginner, tasks[i].resource.length - 1);
             for (int j = 0; j < tasks[i].resource.length; j++) {
-                writeFreeMemory(esp + pcb_resourceBeginner + j, (byte) (tasks[i].resource[j] - 1));
+                writeByte(esp + pcb_resourceBeginner + j, tasks[i].resource[j] - 1);
             }
             esp += pcb_resourceBeginner + tasks[i].resource.length;
         }
-        writeInteger(espBeginner, esp);
+        writeShortResource(espBeginner, esp);
         return esp;
     }
 
-    private boolean useResource(int taskBeginner, int resourceLength) {
-//        System.out.print("test : ");
+    private boolean useResources(int taskBeginner, int resourceLength) {
+//        int tid = readShort(taskBeginner + pcb_tidBeginner);
+//        System.out.print(tid + " is trying to use ");
         for (int i = 0; i < resourceLength; i++) {
-            byte temple = readFreeMemory(taskBeginner + pcb_resourceBeginner + i);
+            int temple = readByte(taskBeginner + pcb_resourceBeginner + i);
 //            System.out.print(temple + " ");
-            if (readFreeMemory(temple + resourceBitBegin) != 0) {
-//                System.out.println();
+            if (readByteResource(resourceBitBegin + temple) != 0) {
+//                System.out.println("fail use " + temple);
                 return false;
             }
         }
 //        System.out.println();
-//        System.out.print("use :");
+//        System.out.print(tid + " is  using ");
         for (int i = 0; i < resourceLength; i++) {
-            byte temple = readFreeMemory(taskBeginner + pcb_resourceBeginner + i);
-            writeFreeMemory(temple + resourceBitBegin, (byte) 1);
+            int temple = readByte(taskBeginner + pcb_resourceBeginner + i);
 //            System.out.print(temple + " ");
+            writeByteResource(resourceBitBegin + temple, 1);
         }
 //        System.out.println();
         return true;
     }
 
-    private void cleanResource(int taskBeginner, int resourceLength) {
-        int cleanLength =   readShort(cleanLengthBegin);
-//        System.out.print("is going to clean :");
+    private void cleanResources(int taskBeginner, int resourceLength) {
+        int cleanLength = readShortResource(cleanLengthBegin);
+//        System.out.print("is ready to clean");
         for (int i = 0; i < resourceLength; i++) {
-            byte temple = readFreeMemory(taskBeginner + pcb_resourceBeginner + i);
-            writeFreeMemory(cleanResourceBegin+cleanLength+i,temple);
-
-//            System.out.print(temple +" ");
+            int temple = readByte(taskBeginner + pcb_resourceBeginner + i);
+//            int x = readByteResource(resourceBitBegin + temple);
+//            System.out.print(" " + temple + " " + (x == 0 ? true : false));
+            writeByteResource(cleanResourceBegin + cleanLength + i, temple);
         }
+
         cleanLength += resourceLength;
-        writeShort(cleanLengthBegin,cleanLength);
-//        System.out.println("clean length is " +cleanLength);
-    }
-    private void clean(){
-        int cleanLength =   readShort(cleanLengthBegin);
-        if (cleanLength > 0) {
-//            System.out.print("clean :" );
-            for (int i = 0; i < cleanLength; i++) {
-                byte temple = readFreeMemory(cleanResourceBegin + i);
-                writeFreeMemory(temple + resourceBitBegin, (byte) 0);
-//                System.out.print(" " + temple);
-            }
-            writeShort(cleanLengthBegin,0);
-//            System.out.println();
-        }
+//        System.out.println(" now resourceLength is " + cleanLength);
 
+        writeShortResource(cleanLengthBegin, cleanLength);
+    }
+
+    private void clean() {
+        int cleanLength = readShortResource(cleanLengthBegin);
+//        System.out.println("is cleaning " + cleanLength + " time tick" + getTimeTick());
+        for (int i = 0; i < cleanLength; i++) {
+            int temple = readByteResource(cleanResourceBegin + i);
+            writeByteResource(temple + resourceBitBegin, 0);
+//            System.out.print(temple + " ");
+        }
+        cleanLength = 0;
+        writeShortResource(cleanLengthBegin, cleanLength);
     }
 
     /**
-     * 读取两个字节
+     * 自由读取
      *
      * @param beginIndex
      * @return
      */
-    private int readShort(int beginIndex) {
+    private int readByteResource(int beginIndex) {
+        return readFreeMemory(beginIndex);
+    }
+
+    /**
+     * 自由写入
+     *
+     * @param beginIndex
+     * @param value
+     */
+    private void writeByteResource(int beginIndex, int value) {
+        writeFreeMemory(beginIndex, (byte) value);
+    }
+
+    /**
+     * 自由写入2字节
+     *
+     * @param beginIndex
+     * @param value
+     */
+    private void writeShortResource(int beginIndex, int value) {
+        writeFreeMemory(beginIndex + 1, (byte) ((value & 0x000000ff)));
+        writeFreeMemory(beginIndex, (byte) ((value & 0x0000ff00) >> 8));
+    }
+
+    /**
+     * 自由写入2字节
+     *
+     * @param beginIndex
+     * @return
+     */
+    private int readShortResource(int beginIndex) {
         int ans = 0;
         ans += (readFreeMemory(beginIndex) & 0xff) << 8;
         ans += (readFreeMemory(beginIndex + 1) & 0xff);
@@ -201,43 +230,46 @@ public class S161250036 extends Schedule {
     }
 
     /**
-     * 写入两个字节的
+     * 受限读取
+     *
+     * @param beginIndex
+     * @return
+     */
+    private int readShort(int beginIndex) {
+        int ans = 0;
+        ans += (readFreeMemory(beginIndex % resourceBitBegin) & 0xff) << 8;
+        ans += (readFreeMemory((beginIndex + 1) % resourceBitBegin) & 0xff);
+        return ans;
+    }
+
+    /**
+     * 受限写入
      *
      * @param beginIndex
      * @param value
      */
     private void writeShort(int beginIndex, int value) {
-        writeFreeMemory(beginIndex + 1, (byte) ((value & 0x000000ff)));
-        writeFreeMemory(beginIndex + 0, (byte) ((value & 0x0000ff00) >> 8));
+        writeFreeMemory((beginIndex + 1) % resourceBitBegin, (byte) ((value & 0x000000ff)));
+        writeFreeMemory(beginIndex % resourceBitBegin, (byte) ((value & 0x0000ff00) >> 8));
     }
 
     /**
-     * 向自由内存中 读一个int型整数
-     *
-     * @param beginIndex
-     * @return
+     * 读取一个字节
      */
-    private int readInteger(int beginIndex) {
-        int ans = 0;
-        ans += (readFreeMemory(beginIndex) & 0xff) << 24;
-        ans += (readFreeMemory(beginIndex + 1) & 0xff) << 16;
-        ans += (readFreeMemory(beginIndex + 2) & 0xff) << 8;
-        ans += (readFreeMemory(beginIndex + 3) & 0xff);
-        return ans;
+    private int readByte(int beginIndex) {
+        return readFreeMemory(beginIndex % resourceBitBegin);
     }
 
     /**
-     * 向自由内存中写一个int型整数
+     * 写一个字节
      *
      * @param beginIndex
      * @param value
      */
-    private void writeInteger(int beginIndex, int value) {
-        writeFreeMemory(beginIndex + 3, (byte) ((value & 0x000000ff)));
-        writeFreeMemory(beginIndex + 2, (byte) ((value & 0x0000ff00) >> 8));
-        writeFreeMemory(beginIndex + 1, (byte) ((value & 0x00ff0000) >> 16));
-        writeFreeMemory(beginIndex, (byte) ((value & 0xff000000) >> 24));
+    private void writeByte(int beginIndex, int value) {
+        writeFreeMemory(beginIndex % resourceBitBegin, (byte) value);
     }
+
 
     /**
      * 执行主函数 用于debug
@@ -249,16 +281,16 @@ public class S161250036 extends Schedule {
      */
     public static void main(String[] args) throws IOException {
         // 定义cpu的数量
-        int cpuNumber = 2;
+        int cpuNumber = 4;
         // 定义测试文件
-        String filename = "src/testFile/textSample.txt";
+        String filename = "src/testFile/rand_7.csv";
         BottomMonitor bottomMonitor = new BottomMonitor(filename, cpuNumber);
         BottomService bottomService = new BottomService(bottomMonitor);
         Schedule schedule = new S161250036();
         schedule.setBottomService(bottomService);
 
         //外部调用实现类
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < 10000; i++) {
             Task[] tasks = bottomMonitor.getTaskArrived();
             int[] cpuOperate = new int[cpuNumber];
 

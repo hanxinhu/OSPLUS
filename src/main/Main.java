@@ -9,7 +9,6 @@ import java.nio.file.Paths;
  */
 public class Main {
     public static void main(String[]  args) throws Exception {
-        System.out.println((byte)127);
         Test test = new Test();
         Files.list(Paths.get("src/work")).forEach(t->{
             String tester = t.getFileName().toString();
