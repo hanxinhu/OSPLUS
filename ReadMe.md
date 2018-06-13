@@ -19,3 +19,6 @@
 ## 资源管理
 采用贪心算法，如果tid's isRunning>0,则继续占有资源,否则检测资源是否可用,若可用,则将所需资源位设为1
 同时在tid完成时,使用cleanResource记录需要释放的资源id,使用cleanLength记录需要释放的资源长度,在每个时间片末尾如果cleanLength>0 则开始释放资源。
+
+##
+所有权保留@hanxinhu
