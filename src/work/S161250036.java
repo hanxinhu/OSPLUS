@@ -33,7 +33,7 @@ import java.io.IOException;
  * void writeFreeMemory(int offset, byte x)
  */
 public class S161250036 extends Schedule {
-    private static final int MEM_SIZE = 20 * 1024 - 1024;
+    private static final int MEM_SIZE = 20 * 1024 - 512;
 
     /**
      * 留1M资源来存 资源占用相关信息
@@ -64,7 +64,6 @@ public class S161250036 extends Schedule {
         int initEBP = ebp;
         int cpuNumber = getCpuNumber();
         int cpuCount = 0;
-
 
         boolean clean = false;
         for (int i = ebp; i < esp && cpuCount < cpuNumber; ) {
@@ -136,50 +135,36 @@ public class S161250036 extends Schedule {
     }
 
     private boolean useResources(int taskBeginner, int resourceLength) {
-//        int tid = readShort(taskBeginner + pcb_tidBeginner);
-//        System.out.print(tid + " is trying to use ");
         for (int i = 0; i < resourceLength; i++) {
             int temple = readByte(taskBeginner + pcb_resourceBeginner + i);
-//            System.out.print(temple + " ");
             if (readByteResource(resourceBitBegin + temple) != 0) {
-//                System.out.println("fail use " + temple);
                 return false;
             }
         }
-//        System.out.println();
-//        System.out.print(tid + " is  using ");
         for (int i = 0; i < resourceLength; i++) {
             int temple = readByte(taskBeginner + pcb_resourceBeginner + i);
-//            System.out.print(temple + " ");
             writeByteResource(resourceBitBegin + temple, 1);
         }
-//        System.out.println();
         return true;
     }
 
     private void cleanResources(int taskBeginner, int resourceLength) {
         int cleanLength = readShortResource(cleanLengthBegin);
-//        System.out.print("is ready to clean");
         for (int i = 0; i < resourceLength; i++) {
             int temple = readByte(taskBeginner + pcb_resourceBeginner + i);
-//            int x = readByteResource(resourceBitBegin + temple);
-//            System.out.print(" " + temple + " " + (x == 0 ? true : false));
             writeByteResource(cleanResourceBegin + cleanLength + i, temple);
         }
-
         cleanLength += resourceLength;
-//        System.out.println(" now resourceLength is " + cleanLength);
-
         writeShortResource(cleanLengthBegin, cleanLength);
     }
 
     private void clean() {
         int cleanLength = readShortResource(cleanLengthBegin);
-//        System.out.println("is cleaning " + cleanLength + " time tick" + getTimeTick());
+        if (cleanLength<=0)
+            return;
         for (int i = 0; i < cleanLength; i++) {
             int temple = readByteResource(cleanResourceBegin + i);
             writeByteResource(temple + resourceBitBegin, 0);
-//            System.out.print(temple + " ");
         }
         cleanLength = 0;
         writeShortResource(cleanLengthBegin, cleanLength);
