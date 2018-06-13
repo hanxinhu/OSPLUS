@@ -21,4 +21,5 @@
 同时在tid完成时,使用cleanResource记录需要释放的资源id,使用cleanLength记录需要释放的资源长度,在每个时间片末尾如果cleanLength>0 则开始释放资源。
 
 
-所有权保留![韩新虎 161250036](https://github.com/hanxinhu)
+所有权保留[韩新虎 161250036](https://github.com/hanxinhu)
+邮箱 <hxh@smail.nju.edu.cn>
