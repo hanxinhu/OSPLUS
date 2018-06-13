@@ -27,7 +27,7 @@ public class Test {
     public void testSample(){
         try {
             for (int i = 1; i <= 10; i++) {
-                runTest(4,"src/testFile/rand_"+i+".csv", "test"+i);
+                runTest(8,"src/testFile/rand_"+i+".csv", "test"+i);
 
             }
         } catch (Exception e) {
